@@ -5,13 +5,24 @@
 #include <vector>
 #include <cstdlib>
 #include <ctime>
+#include <chrono>
 
 class TicTacToe {
 public:
     TicTacToe() : board(3, std::vector<char>(3, ' ')), currentPlayer('X'), gameEnded(false) {}
 
-    void displayBoard() {
-        std::cout << "Current Board:\n";
+    void exibir_tabuleiro(char player, bool isFinal = false) {
+        if (isFinal) {
+            std::cout << "\nResultado Final:\n";
+        } else {
+            #ifdef _WIN32
+                system("cls");
+            #else
+                system("clear");
+            #endif
+            std::cout << "Current Board:\n";
+        }
+
         for (const auto& row : board) {
             for (const auto& cell : row) {
                 std::cout << (cell == ' ' ? '.' : cell) << " ";
@@ -19,23 +30,21 @@ public:
             std::cout << "\n";
         }
         std::cout << std::endl;
+
+        std::cout << "Current player: " << player << "\n\n";
+
     }
 
-    bool makeMove(char player, int row, int col) {
+    bool fazer_jogada(char player, int row, int col) {
         std::lock_guard<std::mutex> lock(boardMutex);
-        if (row < 0 || row >= 3 || col < 0 || col >= 3) {
-            std::cout << "Invalid move position: (" << row << ", " << col << ")\n";
+        if (row < 0 || row >= 3 || col < 0 || col >= 3 || board[row][col] != ' ') {
             return false;
         }
-        if (board[row][col] != ' ') {
-            std::cout << "Position (" << row << ", " << col << ") already occupied.\n";
-            return false;
-        }
-        
+
         board[row][col] = player;
-        displayBoard();
-        
-        if (checkWin(player)) {
+        exibir_tabuleiro(player);
+
+        if (checar_vitoria(player)) {
             std::cout << "Player " << player << " wins!\n";
             gameEnded = true;
             turnCv.notify_all();
@@ -52,7 +61,7 @@ public:
         return false;
     }
 
-    bool checkWin(char player) {
+    bool checar_vitoria(char player) {
         for (int i = 0; i < 3; ++i) {
             if ((board[i][0] == player && board[i][1] == player && board[i][2] == player) ||
                 (board[0][i] == player && board[1][i] == player && board[2][i] == player)) {
@@ -77,7 +86,7 @@ public:
         return true;
     }
 
-    bool isGameOver() {
+    bool is_game_over() {
         std::lock_guard<std::mutex> lock(boardMutex);
         return gameEnded;
     }
@@ -108,28 +117,28 @@ public:
     Player(TicTacToe& game, char symbol) : game(game), symbol(symbol) {}
 
     void playSequential() {
-        for (int i = 0; i < 3 && !game.isGameOver(); ++i) {
-            for (int j = 0; j < 3 && !game.isGameOver(); ++j) {
+        for (int i = 0; i < 3 && !game.is_game_over(); ++i) {
+            for (int j = 0; j < 3 && !game.is_game_over(); ++j) {
                 game.waitForTurn(symbol);
-                if (game.isGameOver()) return;
+                if (game.is_game_over()) return;
 
-                std::cout << "Player " << symbol << " attempting move at " << i << ", " << j << std::endl;
-                if (game.makeMove(symbol, i, j)) return;
+                if (game.fazer_jogada(symbol, i, j)) return;
+                std::this_thread::sleep_for(std::chrono::milliseconds(750)); 
             }
         }
     }
 
     void playRandom() {
         std::srand(std::time(nullptr));
-        while (!game.isGameOver()) {
+        while (!game.is_game_over()) {
             game.waitForTurn(symbol);
-            if (game.isGameOver()) return;
+            if (game.is_game_over()) return;
 
             int row = std::rand() % 3;
             int col = std::rand() % 3;
 
-            std::cout << "Player " << symbol << " attempting random move at " << row << ", " << col << std::endl;
-            if (game.makeMove(symbol, row, col)) return;
+            if (game.fazer_jogada(symbol, row, col)) return;
+            std::this_thread::sleep_for(std::chrono::milliseconds(750)); 
         }
     }
 
@@ -149,8 +158,8 @@ int main() {
     t1.join();
     t2.join();
 
-    if (!game.isGameOver()) {
-        std::cout << "Game ended in a draw.\n";
+    if (!game.is_game_over()) {
+        game.exibir_tabuleiro(game.getCurrentPlayer(), true);
     }
 
     return 0;
